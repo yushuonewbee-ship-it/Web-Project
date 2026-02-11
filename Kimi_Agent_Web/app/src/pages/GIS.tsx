@@ -1,93 +1,376 @@
-import { useEffect, useState, useRef } from 'react';
-import { Map, Layers, Filter, Info, Search, X, ChevronRight } from 'lucide-react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { Map as MapIcon, Layers, Filter, Info, Search, X, ChevronRight, BarChart3, Palette } from 'lucide-react';
+import { MapContainer, GeoJSON, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import type { FeatureCollection, Feature, Geometry, Position } from 'geojson';
+import proj4 from 'proj4';
 
-// 模拟GIS数据 - 实际应用中将来自MySQL数据库
-const mockMapData = {
-  regions: [
-    {
-      id: 1,
-      name: '江南地区',
-      dynasty: '明代',
-      crops: ['水稻', '棉花', '桑蚕'],
-      techniques: ['双季稻', '圩田'],
-      coordinates: { x: 70, y: 60 },
-      documents: ['农政全书', '天工开物'],
-    },
-    {
-      id: 2,
-      name: '华北地区',
-      dynasty: '清代',
-      crops: ['小麦', '高粱', '大豆'],
-      techniques: ['轮作', '灌溉'],
-      coordinates: { x: 60, y: 35 },
-      documents: ['授时通考', '齐民要术'],
-    },
-    {
-      id: 3,
-      name: '四川盆地',
-      dynasty: '明代',
-      crops: ['水稻', '茶叶', '甘蔗'],
-      techniques: ['梯田', '水利'],
-      coordinates: { x: 45, y: 55 },
-      documents: ['蜀中广记'],
-    },
-    {
-      id: 4,
-      name: '岭南地区',
-      dynasty: '清代',
-      crops: ['水稻', '荔枝', '柑橘'],
-      techniques: ['基塘农业'],
-      coordinates: { x: 65, y: 80 },
-      documents: ['广东新语'],
-    },
-    {
-      id: 5,
-      name: '关中平原',
-      dynasty: '明代',
-      crops: ['小麦', '粟', '棉花'],
-      techniques: ['井渠', '代田'],
-      coordinates: { x: 50, y: 45 },
-      documents: ['关中胜迹图志'],
-    },
-    {
-      id: 6,
-      name: '湖广地区',
-      dynasty: '清代',
-      crops: ['水稻', '茶叶', '桐油'],
-      techniques: ['垸田', '围湖造田'],
-      coordinates: { x: 58, y: 58 },
-      documents: ['湖广通志'],
-    },
-  ],
-  rivers: [
-    { name: '长江', path: 'M 20 65 Q 45 60 70 55' },
-    { name: '黄河', path: 'M 25 30 Q 50 35 75 40' },
-  ],
+// 修复 Leaflet 默认图标问题
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+const DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
+
+// 定义投影：Xian_1980_GK_Zone_19 (你的 shp 文件使用的投影)
+const XIAN_1980_GK_ZONE_19 = '+proj=tmerc +lat_0=0 +lon_0=111 +k=1 +x_0=19500000 +y_0=0 +ellps=krass +units=m +no_defs';
+const WGS84 = '+proj=longlat +datum=WGS84 +no_defs';
+
+// 颜色渐变配置（从浅到深）
+const COLOR_SCALES = {
+  red: ['#fee5d9', '#fcbba1', '#fc9272', '#fb6a4a', '#ef3b2c', '#cb181d', '#99000d'],
+  blue: ['#eff3ff', '#c6dbef', '#9ecae1', '#6baed6', '#4292c6', '#2171b5', '#084594'],
+  green: ['#edf8e9', '#c7e9c0', '#a1d99b', '#74c476', '#41ab5d', '#238b45', '#005a32'],
+  purple: ['#f2f0f7', '#dadaeb', '#bcbddc', '#9e9ac8', '#807dba', '#6a51a3', '#4a1486'],
+  orange: ['#feedde', '#fdd0a2', '#fdae6b', '#fd8d3c', '#f16913', '#d94801', '#8c2d04'],
 };
 
-const categories = [
-  { id: 'all', name: '全部', color: '#8c1f1f' },
-  { id: 'crops', name: '农作物分布', color: '#c9a86c' },
-  { id: 'techniques', name: '农业技术', color: '#4a7c59' },
-  { id: 'documents', name: '文献分布', color: '#6b5b95' },
-];
+type ColorScaleName = keyof typeof COLOR_SCALES;
+
+// 坐标转换函数：从 Xian_1980_GK_Zone_19 转换到 WGS84
+function transformCoordinate(coord: number[]): number[] {
+  try {
+    const [x, y] = coord;
+    if (Math.abs(x) > 180 || Math.abs(y) > 90) {
+      const [lng, lat] = proj4(XIAN_1980_GK_ZONE_19, WGS84, [x, y]);
+      return [lng, lat];
+    }
+    return coord;
+  } catch (e) {
+    console.error('坐标转换失败:', e, coord);
+    return coord;
+  }
+}
+
+// 转换整个 GeoJSON 的坐标
+function transformGeoJSON(geojson: FeatureCollection): FeatureCollection {
+  const transformedFeatures = geojson.features.map((feature: Feature) => {
+    const geometry = feature.geometry as Geometry;
+    let transformedGeometry: Geometry;
+
+    if (geometry.type === 'Polygon') {
+      transformedGeometry = {
+        ...geometry,
+        coordinates: geometry.coordinates.map((ring: Position[]) =>
+          ring.map((coord: Position) => transformCoordinate(coord as number[]) as Position)
+        ),
+      };
+    } else if (geometry.type === 'MultiPolygon') {
+      transformedGeometry = {
+        ...geometry,
+        coordinates: geometry.coordinates.map((polygon: Position[][]) =>
+          polygon.map((ring: Position[]) =>
+            ring.map((coord: Position) => transformCoordinate(coord as number[]) as Position)
+          )
+        ),
+      };
+    } else if (geometry.type === 'Point') {
+      transformedGeometry = {
+        ...geometry,
+        coordinates: transformCoordinate(geometry.coordinates as number[]) as Position,
+      };
+    } else if (geometry.type === 'LineString') {
+      transformedGeometry = {
+        ...geometry,
+        coordinates: (geometry.coordinates as Position[]).map((coord: Position) =>
+          transformCoordinate(coord as number[]) as Position
+        ),
+      };
+    } else {
+      transformedGeometry = geometry;
+    }
+
+    return {
+      ...feature,
+      geometry: transformedGeometry,
+    };
+  });
+
+  return {
+    ...geojson,
+    features: transformedFeatures as Feature[],
+  };
+}
+
+// 根据数值获取颜色
+function getColorForValue(value: number | null | undefined, min: number, max: number, colorScale: string[]): string {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '#cccccc'; // 无数据时显示灰色
+  }
+  
+  if (max === min) {
+    return colorScale[Math.floor(colorScale.length / 2)];
+  }
+  
+  const ratio = (value - min) / (max - min);
+  const index = Math.min(Math.floor(ratio * colorScale.length), colorScale.length - 1);
+  return colorScale[Math.max(0, index)];
+}
 
 export default function GIS() {
-  const [selectedRegion, setSelectedRegion] = useState<typeof mockMapData.regions[0] | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [geoJsonData, setGeoJsonData] = useState<FeatureCollection | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isVisible, setIsVisible] = useState(false);
-  const mapRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  
+  // 数据可视化相关状态
+  const [numericFields, setNumericFields] = useState<string[]>([]);
+  const [selectedField, setSelectedField] = useState<string>('');
+  const [colorScaleName, setColorScaleName] = useState<ColorScaleName>('red');
+  const [mergeStats, setMergeStats] = useState<{ matched: number; total: number } | null>(null);
 
+  // 获取可用的数值字段
   useEffect(() => {
+    const fetchFields = async () => {
+      try {
+        const response = await fetch('/api/gis/fields');
+        if (response.ok) {
+          const data = await response.json();
+          setNumericFields(data.numericFields || []);
+          console.log('可用数值字段:', data.numericFields);
+        }
+      } catch (err) {
+        console.error('获取字段列表失败:', err);
+      }
+    };
+    fetchFields();
+  }, []);
+
+  // 从后端加载 merge 后的数据
+  useEffect(() => {
+    const fetchMergedData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        console.log('开始加载 merge 后的 GIS 数据...');
+        const response = await fetch('/api/gis/merged');
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          console.error('收到非 JSON 响应:', text.substring(0, 200));
+          throw new Error('服务器返回了非 JSON 格式的响应。请确保后端服务器正在运行。');
+        }
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: '未知错误' }));
+          throw new Error(errorData.message || '加载地图数据失败');
+        }
+        
+        const data = await response.json();
+        if (data.type === 'FeatureCollection' && Array.isArray(data.features)) {
+          console.log('开始转换投影坐标...');
+          const transformedData = transformGeoJSON(data);
+          console.log('投影转换完成，要素数量:', transformedData.features.length);
+          setGeoJsonData(transformedData);
+          
+          // 保存 merge 统计信息
+          if (data._meta) {
+            setMergeStats({
+              matched: data._meta.matchedFeatures,
+              total: data._meta.totalFeatures,
+            });
+          }
+        } else {
+          throw new Error('返回的数据格式不正确');
+        }
+      } catch (err) {
+        console.error('Error loading merged data:', err);
+        const errorMessage = err instanceof Error 
+          ? err.message 
+          : '加载地图数据失败。请确保后端服务器正在运行（npm run server）';
+        setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMergedData();
     setIsVisible(true);
   }, []);
 
-  // Filter regions based on search
-  const filteredRegions = mockMapData.regions.filter((region) =>
-    region.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // 计算选中字段的最小值和最大值
+  const { minValue, maxValue } = useMemo(() => {
+    if (!geoJsonData || !selectedField) {
+      return { minValue: 0, maxValue: 100 };
+    }
+
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+
+    geoJsonData.features.forEach((feature: Feature) => {
+      const props = feature.properties as Record<string, unknown>;
+      // 数据库字段以 db_ 前缀存储
+      const value = props?.[`db_${selectedField}`];
+      if (value !== null && value !== undefined && !isNaN(Number(value))) {
+        const numValue = Number(value);
+        if (numValue < min) min = numValue;
+        if (numValue > max) max = numValue;
+      }
+    });
+
+    if (min === Number.POSITIVE_INFINITY) {
+      return { minValue: 0, maxValue: 100 };
+    }
+
+    return { minValue: min, maxValue: max };
+  }, [geoJsonData, selectedField]);
+
+  // GeoJSON 样式函数（支持颜色渐变）
+  const getGeoJsonStyle = useCallback((feature: Feature) => {
+    const isSelected = selectedFeature?.properties === feature.properties;
+    const props = feature.properties as Record<string, any>;
+    
+    let fillColor = '#c9a86c'; // 默认颜色
+    
+    if (selectedField) {
+      const value = props?.[`db_${selectedField}`];
+      const colorScale = COLOR_SCALES[colorScaleName];
+      fillColor = getColorForValue(
+        value !== undefined ? Number(value) : null,
+        minValue,
+        maxValue,
+        colorScale
+      );
+    }
+
+    return {
+      fillColor: isSelected ? '#8c1f1f' : fillColor,
+      fillOpacity: 0.7,
+      color: isSelected ? '#8c1f1f' : '#333',
+      weight: isSelected ? 3 : 1,
+      opacity: 0.8,
+    };
+  }, [selectedFeature, selectedField, minValue, maxValue, colorScaleName]);
+
+  // GeoJSON 事件处理
+  const onEachFeature = useCallback((feature: Feature, layer: L.Layer) => {
+    layer.on({
+      mouseover: (e) => {
+        const layer = e.target;
+        layer.setStyle({
+          fillOpacity: 0.9,
+          weight: 2,
+        });
+      },
+      mouseout: (e) => {
+        const layer = e.target;
+        layer.setStyle(getGeoJsonStyle(feature));
+      },
+      click: () => {
+        setSelectedFeature(feature);
+      },
+    });
+
+    // 添加弹出窗口
+    if (feature.properties) {
+      const props = feature.properties as Record<string, any>;
+      const name = props.NAME || props.name || props.NAME_CH || '未知地区';
+      let popupContent = `<strong>${name}</strong>`;
+      
+      // 如果选择了字段，显示该字段的值
+      if (selectedField) {
+        const value = props[`db_${selectedField}`];
+        if (value !== undefined && value !== null) {
+          popupContent += `<br/>${selectedField}: ${value}`;
+        }
+      }
+      
+      layer.bindPopup(popupContent);
+    }
+  }, [getGeoJsonStyle, selectedField]);
+
+  // 计算地图边界
+  const bounds = useMemo((): L.LatLngBoundsExpression => {
+    if (!geoJsonData || !geoJsonData.features || geoJsonData.features.length === 0) {
+      return [[20, 100], [50, 130]];
+    }
+
+    let minLat = Number.POSITIVE_INFINITY;
+    let maxLat = Number.NEGATIVE_INFINITY;
+    let minLng = Number.POSITIVE_INFINITY;
+    let maxLng = Number.NEGATIVE_INFINITY;
+
+    geoJsonData.features.forEach((feature: Feature) => {
+      const processCoord = (coord: Position) => {
+        const [lng, lat] = coord;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+      };
+
+      const geom = feature.geometry;
+      if (geom.type === 'Polygon') {
+        geom.coordinates[0].forEach((coord: Position) => processCoord(coord));
+      } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach((polygon: Position[][]) => {
+          polygon[0].forEach((coord: Position) => processCoord(coord));
+        });
+      }
+    });
+
+    if (minLat === Number.POSITIVE_INFINITY) {
+      return [[20, 100], [50, 130]];
+    }
+
+    return [[minLat, minLng], [maxLat, maxLng]];
+  }, [geoJsonData]);
+
+  // 地图边界调整组件
+  function MapBounds({ mapBounds }: { mapBounds: L.LatLngBoundsExpression }) {
+    const map = useMap();
+    useEffect(() => {
+      if (mapBounds && map) {
+        try {
+          map.fitBounds(mapBounds, { padding: [20, 20] });
+        } catch (err) {
+          console.error('调整地图边界失败:', err);
+        }
+      }
+    }, [map, mapBounds]);
+    return null;
+  }
+
+  // 过滤功能
+  const filteredFeatures = geoJsonData?.features.filter((feature: Feature) => {
+    if (!searchQuery) return true;
+    const props = feature.properties as Record<string, unknown> | null;
+    if (!props) return false;
+    const searchableText = Object.values(props)
+      .map((v) => String(v))
+      .join(' ')
+      .toLowerCase();
+    return searchableText.includes(searchQuery.toLowerCase());
+  });
+
+  // 生成图例
+  const legendItems = useMemo(() => {
+    if (!selectedField) return [];
+    
+    const colorScale = COLOR_SCALES[colorScaleName];
+    const step = (maxValue - minValue) / colorScale.length;
+    
+    return colorScale.map((color, index) => {
+      const from = minValue + step * index;
+      const to = minValue + step * (index + 1);
+      return {
+        color,
+        label: `${from.toFixed(1)} - ${to.toFixed(1)}`,
+      };
+    });
+  }, [selectedField, minValue, maxValue, colorScaleName]);
 
   return (
     <main className="min-h-screen bg-mq-paper pt-20">
@@ -102,11 +385,11 @@ export default function GIS() {
           >
             <div>
               <h1 className="text-2xl font-bold text-mq-ink flex items-center gap-2">
-                <Map className="w-6 h-6 text-mq-red" />
+                <MapIcon className="w-6 h-6 text-mq-red" />
                 GIS地图可视化
               </h1>
               <p className="text-sm text-mq-gray mt-1">
-                探索明清时期农业地理分布，可视化展示农作物、技术与文献的空间分布
+                探索清代府级农业数据空间分布，支持多字段可视化
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -130,80 +413,162 @@ export default function GIS() {
       <div className="flex h-[calc(100vh-140px)]">
         {/* Sidebar */}
         <div
-          className={`bg-white border-r border-mq-border transition-all duration-300
+          className={`bg-white border-r border-mq-border transition-all duration-300 flex flex-col
                     ${isSidebarOpen ? 'w-80' : 'w-0 overflow-hidden'}`}
         >
-          <div className="p-4 h-full overflow-y-auto">
-            {/* Category Filter */}
+          <div className="p-4 flex-1 overflow-y-auto">
+            {/* 数据可视化选择器 */}
             <div className="mb-6">
               <h3 className="text-sm font-semibold text-mq-ink mb-3 flex items-center gap-2">
-                <Layers className="w-4 h-4" />
-                图层选择
+                <BarChart3 className="w-4 h-4" />
+                数据可视化
               </h3>
-              <div className="space-y-2">
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => setSelectedCategory(cat.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg
-                              transition-all duration-300 ${
-                                selectedCategory === cat.id
-                                  ? 'bg-mq-red text-white'
-                                  : 'hover:bg-mq-paper text-mq-gray'
-                              }`}
-                  >
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: cat.color }}
-                    />
-                    <span className="text-sm">{cat.name}</span>
-                  </button>
-                ))}
+              
+              {/* 字段选择 */}
+              <div className="mb-3">
+                <label className="block text-xs text-mq-gray mb-1">选择可视化字段</label>
+                <select
+                  value={selectedField}
+                  onChange={(e) => setSelectedField(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-mq-border text-sm
+                           focus:outline-none focus:border-mq-red focus:ring-2 focus:ring-mq-red/20"
+                >
+                  <option value="">-- 选择字段 --</option>
+                  {numericFields.map((field) => (
+                    <option key={field} value={field}>
+                      {field}
+                    </option>
+                  ))}
+                </select>
               </div>
+
+              {/* 颜色方案选择 */}
+              <div className="mb-3">
+                <label className="block text-xs text-mq-gray mb-1 flex items-center gap-1">
+                  <Palette className="w-3 h-3" />
+                  颜色方案
+                </label>
+                <div className="flex gap-2 flex-wrap">
+                  {(Object.keys(COLOR_SCALES) as ColorScaleName[]).map((name) => (
+                    <button
+                      key={name}
+                      onClick={() => setColorScaleName(name)}
+                      className={`px-3 py-1 rounded text-xs transition-all
+                                ${colorScaleName === name 
+                                  ? 'bg-mq-red text-white' 
+                                  : 'bg-mq-paper text-mq-gray hover:bg-mq-border'}`}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 数据统计 */}
+              {mergeStats && (
+                <div className="text-xs text-mq-gray bg-mq-paper rounded-lg p-2 mt-3">
+                  <div>数据匹配: {mergeStats.matched} / {mergeStats.total}</div>
+                  {selectedField && (
+                    <div className="mt-1">
+                      {selectedField}: {minValue.toFixed(2)} ~ {maxValue.toFixed(2)}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Region List */}
+            {/* 图例 */}
+            {selectedField && legendItems.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-mq-ink mb-3 flex items-center gap-2">
+                  <Layers className="w-4 h-4" />
+                  图例 - {selectedField}
+                </h3>
+                <div className="space-y-1">
+                  {legendItems.map((item, index) => (
+                    <div key={index} className="flex items-center gap-2 text-xs">
+                      <span
+                        className="w-5 h-4 rounded"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      <span className="text-mq-gray">{item.label}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-2 text-xs mt-2">
+                    <span
+                      className="w-5 h-4 rounded"
+                      style={{ backgroundColor: '#cccccc' }}
+                    />
+                    <span className="text-mq-gray">无数据</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Feature List */}
             <div>
               <h3 className="text-sm font-semibold text-mq-ink mb-3 flex items-center gap-2">
                 <Filter className="w-4 h-4" />
                 地区列表
               </h3>
-              <div className="space-y-2">
-                {filteredRegions.map((region) => (
-                  <button
-                    key={region.id}
-                    onClick={() => setSelectedRegion(region)}
-                    className={`w-full text-left px-3 py-3 rounded-lg border
-                              transition-all duration-300 ${
-                                selectedRegion?.id === region.id
-                                  ? 'border-mq-red bg-mq-red/5'
-                                  : 'border-mq-border hover:border-mq-red/50'
+              {loading ? (
+                <div className="text-sm text-mq-gray">加载中...</div>
+              ) : error ? (
+                <div className="text-sm text-red-600">{error}</div>
+              ) : filteredFeatures && filteredFeatures.length > 0 ? (
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {filteredFeatures.slice(0, 50).map((feature: Feature, index: number) => {
+                    const props = feature.properties as Record<string, unknown> | null;
+                    const name = (props?.NAME || props?.name || props?.NAME_CH || `地区 ${index + 1}`) as string;
+                    const isSelected = selectedFeature?.properties === feature.properties;
+                    const fieldValue = selectedField ? props?.[`db_${selectedField}`] : null;
+                    
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => setSelectedFeature(feature)}
+                        className={`w-full text-left px-3 py-2 rounded-lg border
+                                  transition-all duration-300 ${
+                                    isSelected
+                                      ? 'border-mq-red bg-mq-red/5'
+                                      : 'border-mq-border hover:border-mq-red/50'
+                                  }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-mq-ink text-sm">{name}</span>
+                          <div className="flex items-center gap-2">
+                            {fieldValue !== null && fieldValue !== undefined && (
+                              <span className="text-xs text-mq-gray">{String(fieldValue)}</span>
+                            )}
+                            <ChevronRight
+                              className={`w-4 h-4 transition-transform duration-300 ${
+                                isSelected ? 'rotate-90' : ''
                               }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-mq-ink">{region.name}</span>
-                      <ChevronRight
-                        className={`w-4 h-4 transition-transform duration-300 ${
-                          selectedRegion?.id === region.id ? 'rotate-90' : ''
-                        }`}
-                      />
+                            />
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {filteredFeatures.length > 50 && (
+                    <div className="text-xs text-mq-gray text-center py-2">
+                      显示前 50 项，共 {filteredFeatures.length} 项
                     </div>
-                    <div className="text-xs text-mq-gray mt-1">
-                      {region.dynasty} · {region.crops.length}种作物
-                    </div>
-                  </button>
-                ))}
-              </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm text-mq-gray">暂无数据</div>
+              )}
             </div>
           </div>
         </div>
 
         {/* Map Area */}
-        <div className="flex-1 relative bg-mq-paper" ref={mapRef}>
+        <div className="flex-1 relative bg-mq-paper">
           {/* Toggle Sidebar Button */}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="absolute top-4 left-4 z-10 w-10 h-10 bg-white rounded-lg
+            className="absolute top-4 left-4 z-[1000] w-10 h-10 bg-white rounded-lg
                      shadow-md flex items-center justify-center
                      transition-all duration-300 hover:shadow-lg"
           >
@@ -211,111 +576,54 @@ export default function GIS() {
           </button>
 
           {/* Map Visualization */}
-          <div className="absolute inset-0 flex items-center justify-center p-8">
-            <div className="relative w-full max-w-4xl aspect-[4/3]">
-              {/* Map Background */}
-              <svg
-                viewBox="0 0 100 100"
-                className="w-full h-full"
-                style={{ filter: 'drop-shadow(0 4px 20px rgba(0,0,0,0.1))' }}
-              >
-                {/* China outline (simplified) */}
-                <path
-                  d="M 20 20 Q 40 15 60 20 Q 80 25 85 45 Q 90 65 80 80 Q 60 90 40 85 Q 20 80 15 60 Q 10 40 20 20 Z"
-                  fill="#f5f0e8"
-                  stroke="#d4d4d4"
-                  strokeWidth="0.5"
-                />
-
-                {/* Rivers */}
-                {mockMapData.rivers.map((river, index) => (
-                  <path
-                    key={index}
-                    d={river.path}
-                    fill="none"
-                    stroke="#7eb8da"
-                    strokeWidth="1"
-                    strokeLinecap="round"
-                  />
-                ))}
-
-                {/* Region Markers */}
-                {mockMapData.regions.map((region) => (
-                  <g key={region.id}>
-                    {/* Pulse animation circle */}
-                    <circle
-                      cx={region.coordinates.x}
-                      cy={region.coordinates.y}
-                      r="3"
-                      fill={selectedRegion?.id === region.id ? '#8c1f1f' : '#c9a86c'}
-                      className="cursor-pointer transition-all duration-300"
-                      onClick={() => setSelectedRegion(region)}
-                    >
-                      <animate
-                        attributeName="r"
-                        values="3;4;3"
-                        dur="2s"
-                        repeatCount="indefinite"
-                      />
-                      <animate
-                        attributeName="opacity"
-                        values="1;0.5;1"
-                        dur="2s"
-                        repeatCount="indefinite"
-                      />
-                    </circle>
-                    {/* Label */}
-                    <text
-                      x={region.coordinates.x}
-                      y={region.coordinates.y - 5}
-                      textAnchor="middle"
-                      fontSize="3"
-                      fill="#1a1a1a"
-                      className="cursor-pointer"
-                      onClick={() => setSelectedRegion(region)}
-                    >
-                      {region.name}
-                    </text>
-                  </g>
-                ))}
-              </svg>
-
-              {/* Legend */}
-              <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm
-                            rounded-lg p-3 shadow-md">
-                <h4 className="text-xs font-semibold text-mq-ink mb-2">图例</h4>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-mq-red" />
-                    <span className="text-xs text-mq-gray">选中地区</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-mq-gold" />
-                    <span className="text-xs text-mq-gray">普通地区</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-4 h-0.5 bg-[#7eb8da]" />
-                    <span className="text-xs text-mq-gray">主要河流</span>
-                  </div>
-                </div>
-              </div>
+          {loading ? (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-mq-gray">加载地图数据中...</div>
             </div>
-          </div>
+          ) : error ? (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-red-600">{error}</div>
+            </div>
+          ) : geoJsonData ? (
+            <MapContainer
+              center={[35, 110]}
+              zoom={5}
+              style={{ height: '100%', width: '100%' }}
+              ref={mapRef}
+            >
+              {filteredFeatures && (
+                <GeoJSON
+                  key={`geojson-${selectedField}-${colorScaleName}`}
+                  data={{ type: 'FeatureCollection', features: filteredFeatures } as FeatureCollection}
+                  style={(feature) => feature ? getGeoJsonStyle(feature as Feature) : {}}
+                  onEachFeature={(feature, layer) => onEachFeature(feature as Feature, layer)}
+                />
+              )}
+              <MapBounds mapBounds={bounds} />
+            </MapContainer>
+          ) : null}
 
-          {/* Region Detail Panel */}
-          {selectedRegion && (
-            <div className="absolute top-4 right-4 w-80 bg-white rounded-xl shadow-mq-lg
-                          animate-slide-in-right">
+          {/* Feature Detail Panel */}
+          {selectedFeature && (
+            <div className="absolute top-4 right-4 w-80 bg-white rounded-xl shadow-mq-lg z-[1000]
+                          animate-slide-in-right max-h-[80vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h3 className="text-xl font-bold text-mq-ink">
-                      {selectedRegion.name}
+                      {(selectedFeature.properties as Record<string, any>)?.NAME ||
+                        (selectedFeature.properties as Record<string, any>)?.name ||
+                        (selectedFeature.properties as Record<string, any>)?.NAME_CH ||
+                        '未知地区'}
                     </h3>
-                    <span className="text-sm text-mq-gold">{selectedRegion.dynasty}</span>
+                    {(selectedFeature.properties as Record<string, any>)?._merged && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded mt-1 inline-block">
+                        已匹配数据库
+                      </span>
+                    )}
                   </div>
                   <button
-                    onClick={() => setSelectedRegion(null)}
+                    onClick={() => setSelectedFeature(null)}
                     className="p-1 hover:bg-mq-paper rounded transition-colors"
                   >
                     <X className="w-5 h-5 text-mq-gray" />
@@ -323,66 +631,42 @@ export default function GIS() {
                 </div>
 
                 <div className="space-y-4">
-                  {/* Crops */}
+                  {/* 数据库字段 */}
                   <div>
                     <h4 className="text-sm font-semibold text-mq-ink mb-2 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-mq-red" />
-                      主要农作物
+                      <BarChart3 className="w-4 h-4" />
+                      数据库数据
                     </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedRegion.crops.map((crop, index) => (
-                        <span
-                          key={index}
-                          className="px-2 py-1 bg-mq-paper text-mq-gray text-xs rounded"
-                        >
-                          {crop}
-                        </span>
-                      ))}
+                    <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                      {Object.entries(selectedFeature.properties as Record<string, any>)
+                        .filter(([key]) => key.startsWith('db_'))
+                        .map(([key, value]) => (
+                          <div key={key} className="text-sm flex justify-between">
+                            <span className="text-mq-gray">{key.replace('db_', '')}:</span>
+                            <span className="text-mq-ink font-medium">{String(value ?? '-')}</span>
+                          </div>
+                        ))}
                     </div>
                   </div>
 
-                  {/* Techniques */}
+                  {/* 原始属性 */}
                   <div>
                     <h4 className="text-sm font-semibold text-mq-ink mb-2 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#4a7c59]" />
-                      农业技术
+                      <Info className="w-4 h-4" />
+                      地图属性
                     </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedRegion.techniques.map((tech, index) => (
-                        <span
-                          key={index}
-                          className="px-2 py-1 bg-mq-paper text-mq-gray text-xs rounded"
-                        >
-                          {tech}
-                        </span>
-                      ))}
+                    <div className="space-y-1 max-h-[150px] overflow-y-auto">
+                      {Object.entries(selectedFeature.properties as Record<string, any>)
+                        .filter(([key]) => !key.startsWith('db_') && !key.startsWith('_'))
+                        .slice(0, 10)
+                        .map(([key, value]) => (
+                          <div key={key} className="text-sm flex justify-between">
+                            <span className="text-mq-gray">{key}:</span>
+                            <span className="text-mq-ink">{String(value)}</span>
+                          </div>
+                        ))}
                     </div>
                   </div>
-
-                  {/* Documents */}
-                  <div>
-                    <h4 className="text-sm font-semibold text-mq-ink mb-2 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#6b5b95]" />
-                      相关文献
-                    </h4>
-                    <ul className="space-y-1">
-                      {selectedRegion.documents.map((doc, index) => (
-                        <li
-                          key={index}
-                          className="text-sm text-mq-gray flex items-center gap-2"
-                        >
-                          <Info className="w-3 h-3" />
-                          {doc}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Action */}
-                  <button className="w-full mt-4 py-2 bg-mq-red text-white rounded-lg
-                                   transition-all duration-300 hover:bg-mq-red-dark">
-                    查看详细资料
-                  </button>
                 </div>
               </div>
             </div>
@@ -390,15 +674,21 @@ export default function GIS() {
         </div>
       </div>
 
-      {/* Database Connection Info */}
-      <div className="fixed bottom-4 left-4 bg-white rounded-lg shadow-md p-3 text-xs text-mq-gray">
+      {/* Status Bar */}
+      <div className="fixed bottom-4 left-4 bg-white rounded-lg shadow-md p-3 text-xs text-mq-gray z-[1000]">
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-500" />
-          <span>数据库已连接</span>
+          <span className={`w-2 h-2 rounded-full ${error ? 'bg-red-500' : 'bg-green-500'}`} />
+          <span>{error ? '地图加载失败' : '地图已加载'}</span>
         </div>
         <div className="mt-1 text-mq-gray/60">
-          明清农业数据库 | localhost:3306
+          清代府级底图 | {geoJsonData?.features.length || 0} 个区域
+          {mergeStats && ` | ${mergeStats.matched} 条数据匹配`}
         </div>
+        {selectedField && (
+          <div className="mt-1 text-mq-red">
+            当前可视化: {selectedField}
+          </div>
+        )}
       </div>
     </main>
   );
