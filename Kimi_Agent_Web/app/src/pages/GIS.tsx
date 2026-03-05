@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { Map as MapIcon, Layers, Filter, Info, Search, X, ChevronRight, BarChart3, Palette } from 'lucide-react';
-import { MapContainer, GeoJSON } from 'react-leaflet';
+import { MapContainer, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { FeatureCollection, Feature, Geometry, Position } from 'geojson';
@@ -296,14 +296,12 @@ export default function GIS() {
         const layer = e.target;
         layer.setStyle(getGeoJsonStyle(feature));
       },
-      click: (e) => {
-        // 阻止事件冒泡，防止地图缩放
-        L.DomEvent.stopPropagation(e);
+      click: () => {
         setSelectedFeature(feature);
       },
     });
 
-    // 添加弹出窗口（禁用自动平移）
+    // 添加弹出窗口
     if (feature.properties) {
       const props = feature.properties as Record<string, any>;
       const name = props.NAME || props.name || props.NAME_CH || '未知地区';
@@ -317,7 +315,7 @@ export default function GIS() {
         }
       }
       
-      layer.bindPopup(popupContent, { autoPan: false });
+      layer.bindPopup(popupContent);
     }
   }, [getGeoJsonStyle, selectedField]);
 
@@ -358,20 +356,20 @@ export default function GIS() {
     return [[minLat, minLng], [maxLat, maxLng]];
   }, [geoJsonData]);
 
-  // 缓存地图中心点，避免重复创建数组导致重新渲染
-  const mapCenter = useMemo(() => [35, 110] as [number, number], []);
-  
-  // 地图创建时的回调 - 只执行一次边界调整
-  const handleMapCreated = useCallback((map: L.Map) => {
-    mapRef.current = map;
-    if (bounds) {
-      try {
-        map.fitBounds(bounds, { padding: [20, 20] });
-      } catch (err) {
-        console.error('调整地图边界失败:', err);
+  // 地图边界调整组件
+  function MapBounds({ mapBounds }: { mapBounds: L.LatLngBoundsExpression }) {
+    const map = useMap();
+    useEffect(() => {
+      if (mapBounds && map) {
+        try {
+          map.fitBounds(mapBounds, { padding: [20, 20] });
+        } catch (err) {
+          console.error('调整地图边界失败:', err);
+        }
       }
-    }
-  }, [bounds]);
+    }, [map, mapBounds]);
+    return null;
+  }
 
   // 过滤功能
   const filteredFeatures = geoJsonData?.features.filter((feature: Feature) => {
@@ -612,10 +610,10 @@ export default function GIS() {
             </div>
           ) : geoJsonData ? (
             <MapContainer
-              center={mapCenter}
+              center={[35, 110]}
               zoom={5}
               style={{ height: '100%', width: '100%' }}
-              whenCreated={handleMapCreated}
+              ref={mapRef}
             >
               {filteredFeatures && (
                 <GeoJSON
@@ -625,6 +623,7 @@ export default function GIS() {
                   onEachFeature={(feature, layer) => onEachFeature(feature as Feature, layer)}
                 />
               )}
+              <MapBounds mapBounds={bounds} />
             </MapContainer>
           ) : null}
 
