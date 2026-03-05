@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { BookOpen, Target, Users, Globe, Database, Shield } from 'lucide-react';
 
 const milestones = [
-  { year: '2023', title: '项目启动', desc: '明清农业数据库项目正式立项' },
-  { year: '2023', title: '资料收集', desc: '开始收集整理明清农业古籍资料' },
-  { year: '2024', title: '平台搭建', desc: '完成数据库架构设计与前端开发' },
-  { year: '2024', title: '正式上线', desc: '数据库正式对外开放使用' },
+  { year: '2025.3.30', title: '提交申请', desc: '撰写立项申请书并提交书院' },
+  { year: '2025.4.21', title: '项目启动', desc: '明清农业数据库项目正式立项' },
+  { year: '2025.5—11', title: '中期调研', desc: '开始收集整理数据并着手估算建构' },
+  { year: '2025.12—2026.2', title: '平台搭建', desc: '完成数据库架构设计与前端开发' },
+  { year: '2026.2—3.15', title: '学术产出', desc: '基于数据库进行学术论文撰写与后续分析' },
 ];
 
 const values = [
@@ -16,13 +17,13 @@ const values = [
   },
   {
     icon: Target,
-    title: '精准收录',
-    desc: '严格筛选，确保每一份文献的价值',
+    title: '成果激活',
+    desc: '灵活利用已有学术成果，深入挖掘典籍中的知识成果',
   },
   {
     icon: Users,
     title: '服务学术',
-    desc: '为研究者提供便捷的文献检索服务',
+    desc: '为研究者提供便捷的数据检索服务和相关领域讯息',
   },
   {
     icon: Globe,
@@ -37,7 +38,7 @@ const values = [
   {
     icon: Shield,
     title: '权威可靠',
-    desc: '与知名图书馆、档案馆合作',
+    desc: '基于知名学者发表数据开展稳健保守的估算',
   },
 ];
 
@@ -52,19 +53,36 @@ export default function About() {
   return (
     <main className="min-h-screen bg-mq-paper pt-24">
       {/* Hero Section */}
-      <section className="relative py-20 bg-gradient-to-b from-mq-red/5 to-transparent">
-        <div className="mq-container">
+      <section 
+        className="relative py-20 bg-gradient-to-b from-mq-red/5 to-transparent"
+        style={{
+          backgroundImage: 'url(/农耕图.jpg)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
+        <div className="absolute inset-0 bg-mq-red/10"></div>
+        <div className="mq-container relative z-10">
           <div
-            className={`text-center max-w-3xl mx-auto transition-all duration-700 ${
+            className={`max-w-3xl mx-auto transition-all duration-700 ${
               isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
             }`}
+            style={{ 
+              backgroundColor: 'rgba(251, 248, 243, 0.75)',
+              padding: '2rem',
+              borderRadius: '1rem',
+            }}
           >
-            <h1 className="text-4xl md:text-5xl font-bold text-mq-ink mb-6">
+            <h1 className="text-4xl md:text-5xl font-bold text-mq-red mb-6 text-center"
+               style={{ textShadow: '2px 2px 4px rgba(140, 31, 31, 0.2)' }}>
               项目介绍
             </h1>
-            <p className="text-xl text-mq-gray leading-relaxed">
-              明清农业数据库是一个专注于明清时期农业文献的数字化平台，
-              致力于保护、整理和传播中华农业文化遗产。
+            <p className="text-xl text-mq-ink leading-relaxed text-left font-serif"
+               style={{ 
+                 textShadow: 'none',
+               }}>
+              明清农业数据库是五位来自中国人民大学经济学院和数学学院的本科生在农业农村发展学院翟润卓老师指导下建构的经济史量化项目。数据库跨度明初1400年至晚清1850年，涵盖人口、农业、经济等多个维度的数据，旨在为学界提供全面、详实、严谨的明清农业经济生产状态数据。数据分为两个省一级的面板数据（1400年、1580年；1661年、1685年、1724年、1766年、1812年、1850年）和府州县一级的截面数据（1700年）。我们的研究进一步开创性地估算了各个时期不同地区的农业全要素生产率（TFP）以及技术进步率，首次量化了早近中国农业技术生产率的历史变迁与时空演变，在提倡发展农业新质生产力的当代中国具有独特的时代价值，这些也是我们团队的最大贡献所在。希望我们的项目能对您的研究有所启发，也期待您的宝贵建议！
             </p>
           </div>
         </div>
@@ -82,16 +100,10 @@ export default function About() {
               <h2 className="text-3xl font-bold text-mq-ink mb-6">项目背景</h2>
               <div className="space-y-4 text-mq-gray leading-relaxed">
                 <p>
-                  明清两代是中国古代农业发展的鼎盛时期，留下了大量珍贵的农业文献。
-                  这些古籍不仅记录了当时的农业生产技术，更蕴含着深厚的农耕智慧和文化内涵。
+                  本研究属于中国人民大学"求是学术"品牌项目下设的"首善"子项目，被推荐为北京市级大学生创新创业训练计划等省部级项目。
                 </p>
                 <p>
-                  然而，由于年代久远，许多珍贵的农业古籍面临损毁、流失的风险。
-                  为了保护和传承这些宝贵的文化遗产，我们启动了明清农业数据库项目。
-                </p>
-                <p>
-                  本项目采用先进的数字化技术，对明清时期的农业古籍进行高精度扫描、
-                  OCR识别和结构化处理，建立起一个全面、系统的数字资源库。
+                  本研究团队在一年的项目周期内积极开展学术交流、项目调研，培育创新精神、培植创新成果，在实践中发扬"求是"精神。
                 </p>
               </div>
             </div>
@@ -104,10 +116,10 @@ export default function About() {
                 <h3 className="text-xl font-bold text-mq-ink mb-6">项目数据</h3>
                 <div className="grid grid-cols-2 gap-6">
                   {[
-                    { value: '703', label: '收录资源' },
-                    { value: '128', label: '农业古籍' },
-                    { value: '56', label: '历史地图' },
-                    { value: '12', label: '合作机构' },
+                    { value: '2', label: '明代年份' },
+                    { value: '6', label: '清代年份' },
+                    { value: '1', label: '清代截面' },
+                    { value: '4+', label: '数据维度' },
                   ].map((stat, index) => (
                     <div key={index} className="text-center p-4 bg-mq-paper rounded-xl">
                       <div className="text-3xl font-bold text-mq-red mb-1">
@@ -124,8 +136,17 @@ export default function About() {
       </section>
 
       {/* Timeline */}
-      <section className="py-16 bg-white">
-        <div className="mq-container">
+      <section 
+        className="py-16 relative"
+        style={{
+          backgroundImage: 'url(/09_AI生成_灌溉农耕图.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
+        <div className="absolute inset-0 bg-white/60"></div>
+        <div className="mq-container relative z-10">
           <h2 className="text-3xl font-bold text-mq-ink text-center mb-12">
             发展历程
           </h2>
@@ -148,12 +169,15 @@ export default function About() {
                   >
                     <div
                       className={`bg-mq-paper rounded-xl p-6 shadow-mq inline-block
-                                transition-all duration-700 ${
-                                  isVisible
+                                hover:shadow-mq-lg hover:-translate-y-2
+                                ${isVisible
                                     ? 'opacity-100 translate-y-0'
                                     : 'opacity-0 translate-y-8'
                                 }`}
-                      style={{ transitionDelay: `${600 + index * 100}ms` }}
+                      style={{ 
+                        transitionDelay: `${600 + index * 100}ms`,
+                        transition: 'all 150ms ease-out'
+                      }}
                     >
                       <span className="text-mq-red font-bold text-lg">
                         {milestone.year}
@@ -185,13 +209,15 @@ export default function About() {
                 <div
                   key={index}
                   className={`bg-white rounded-xl p-6 shadow-mq
-                            transition-all duration-700 hover:shadow-mq-lg hover:-translate-y-1
-                            ${
-                              isVisible
+                            hover:shadow-mq-lg hover:-translate-y-3 cursor-pointer
+                            ${isVisible
                                 ? 'opacity-100 translate-y-0'
                                 : 'opacity-0 translate-y-8'
                             }`}
-                  style={{ transitionDelay: `${1000 + index * 100}ms` }}
+                  style={{ 
+                    transitionDelay: `${1000 + index * 100}ms`,
+                    transition: 'all 150ms ease-out'
+                  }}
                 >
                   <div className="w-12 h-12 bg-mq-red/10 rounded-lg flex items-center justify-center mb-4">
                     <Icon className="w-6 h-6 text-mq-red" />

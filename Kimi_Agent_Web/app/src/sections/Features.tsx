@@ -4,16 +4,16 @@ import { BookOpen, Eye, Lock } from 'lucide-react';
 const features = [
   {
     icon: BookOpen,
-    title: '精心挑选',
+    title: '精心整合',
     description:
-      '我们专注于收录明清时期的珍贵农业古籍，包括《齐民要术》、《农政全书》等经典著作，确保每一份文献都具有重要的历史和研究价值。',
+      '我们专注于从明清时期经典典籍和学者研究中收集整理系统结构化的明清农业经济生产数据，包括《中国人口史》、《清代的发展与不发展》、《大明会典》等著作，确保每一份文献都具有重要的历史和研究价值。',
     offset: 0,
   },
   {
     icon: Eye,
     title: '全力呈现',
     description:
-      '采用高精度数字化技术，完整还原古籍原貌。提供原文阅读、注释解读、现代翻译等多种阅读模式，让古籍触手可及。',
+      '采用Web数字化技术，完整系统呈现明清农业生产状态与技术进步率，提供原文阅读、数据查询、可视化分析等多种功能，让我们的研究成果立体可感。',
     offset: 40,
   },
   {
@@ -61,7 +61,7 @@ export default function Features() {
         <div className="text-center mb-16">
           <h2 className="mq-section-title">完全开放</h2>
           <p className="mq-section-subtitle max-w-2xl mx-auto">
-            明清农业数据库是一个自由开放的数字图书馆，致力于开放式分享、介绍、推荐有价值的农业古籍
+            我们的网站是一个完全自由开放的项目查询、数据获取、成果共享的数字档案馆，致力于为量化经济史领域同僚和所有感兴趣的学者分享我们的研究成果
           </p>
         </div>
 

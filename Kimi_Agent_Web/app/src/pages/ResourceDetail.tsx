@@ -1,4 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
+import { apiBase } from '../lib/apiBase';
 import { useEffect, useState } from 'react';
 import { Download, Share2, BookOpen, Calendar, User, FileText } from 'lucide-react';
 
@@ -49,7 +50,7 @@ export default function ResourceDetail() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/documents/${resourceId}`);
+        const res = await fetch(`${apiBase}/api/documents/${resourceId}`);
         if (!res.ok) {
           throw new Error('获取文献详情失败');
         }

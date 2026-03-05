@@ -10,16 +10,22 @@ const navLinks = [
   { name: 'GIS地图', path: '/gis' },
 ];
 
+// 这些页面首屏为浅色，导航栏始终使用深色文字+白底以保证可读
+const PAGES_WITH_LIGHT_TOP = ['/gis', '/database', '/authors'];
+
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const location = useLocation();
 
+  const useSolidNav = isScrolled || PAGES_WITH_LIGHT_TOP.includes(location.pathname);
+
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 100);
+      setIsScrolled(window.scrollY > 20);
     };
+    setIsScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -28,8 +34,8 @@ export default function Navbar() {
     <>
       <nav
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-          isScrolled
-            ? 'bg-mq-paper/95 backdrop-blur-md shadow-md py-3'
+          useSolidNav
+            ? 'bg-white/98 backdrop-blur-md shadow-md py-3 text-mq-ink'
             : 'bg-transparent py-5'
         }`}
       >
@@ -46,7 +52,7 @@ export default function Navbar() {
                 <span className="text-white font-bold text-lg">明</span>
               </div>
               <span className={`text-xl font-bold transition-colors duration-300 ${
-                isScrolled ? 'text-mq-red' : 'text-white'
+                useSolidNav ? 'text-mq-red' : 'text-white drop-shadow-md'
               }`}>
                 明清农业数据库
               </span>
@@ -59,7 +65,7 @@ export default function Navbar() {
                   key={link.path}
                   to={link.path}
                   className={`relative font-medium transition-colors duration-300 ${
-                    isScrolled ? 'text-mq-red hover:text-mq-red-dark' : 'text-white/90 hover:text-white'
+                    useSolidNav ? 'text-mq-ink hover:text-mq-red' : 'text-white/95 hover:text-white drop-shadow-md'
                   } ${location.pathname === link.path ? 'font-semibold' : ''}`}
                 >
                   {link.name}
@@ -76,7 +82,7 @@ export default function Navbar() {
               <button
                 onClick={() => setIsSearchOpen(true)}
                 className={`p-2 rounded-full transition-all duration-300 ${
-                  isScrolled
+                  useSolidNav
                     ? 'text-mq-red hover:bg-mq-red/10'
                     : 'text-white hover:bg-white/10'
                 }`}
@@ -88,7 +94,7 @@ export default function Navbar() {
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 className={`md:hidden p-2 rounded-full transition-all duration-300 ${
-                  isScrolled
+                  useSolidNav
                     ? 'text-mq-red hover:bg-mq-red/10'
                     : 'text-white hover:bg-white/10'
                 }`}
@@ -135,7 +141,7 @@ export default function Navbar() {
             <div className="relative">
               <input
                 type="text"
-                placeholder="搜索古籍、农书、资料..."
+                placeholder="搜索省份或府州县名"
                 className="w-full px-6 py-4 text-xl bg-white rounded-full border-2 border-mq-gold
                          focus:outline-none focus:border-mq-red transition-colors duration-300"
                 autoFocus

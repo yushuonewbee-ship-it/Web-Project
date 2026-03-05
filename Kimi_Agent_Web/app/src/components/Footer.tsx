@@ -7,26 +7,26 @@ const footerLinks = {
     links: [
       { name: '项目介绍', path: '/about' },
       { name: '团队简介', path: '/authors' },
-      { name: '联系方式', path: '/about' },
-      { name: '加入我们', path: '/about' },
+      { name: '联系方式', path: '/authors' },
+      { name: '加入我们', path: '/authors' },
     ],
   },
   resources: {
     title: '资源分类',
     links: [
-      { name: '农业古籍', path: '/database' },
-      { name: '农书注解', path: '/database' },
-      { name: '历史地图', path: '/gis' },
-      { name: '研究论文', path: '/database' },
+      { name: '古代数据库', path: '/database' },
+      { name: '历史地理系统', path: '/gis' },
+      { name: '项目研究论文', path: '/database' },
     ],
   },
   services: {
     title: '服务支持',
     links: [
       { name: '使用帮助', path: '/about' },
-      { name: 'API文档', path: '/about' },
+      { name: '数据查询', path: '/database' },
       { name: '数据下载', path: '/database' },
-      { name: '引用指南', path: '/about' },
+      { name: 'GIS探查', path: '/gis' },
+      { name: '论文获取', path: '/database' },
     ],
   },
 };
@@ -48,13 +48,12 @@ export default function Footer() {
               </span>
             </Link>
             <p className="text-mq-gray leading-relaxed mb-6 max-w-sm">
-              致力于数字化保护与传承明清时期农业文化遗产，
-              为学术研究和文化传播提供开放、自由的资源平台。
+              致力于古代历史量化与经济史还原，为学术研究和文化传承提供开放、自由的资源平台。
             </p>
             <div className="space-y-3">
               <div className="flex items-center gap-3 text-mq-gray">
                 <Mail className="w-5 h-5 text-mq-red" />
-                <span>contact@mingqing.org</span>
+                <span>2023200655@ruc.edu.cn</span>
               </div>
               <div className="flex items-center gap-3 text-mq-gray">
                 <MapPin className="w-5 h-5 text-mq-red" />
@@ -62,7 +61,7 @@ export default function Footer() {
               </div>
               <div className="flex items-center gap-3 text-mq-gray">
                 <Phone className="w-5 h-5 text-mq-red" />
-                <span>+86 10 1234 5678</span>
+                <span>+86 15268430996</span>
               </div>
             </div>
           </div>

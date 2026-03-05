@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { Map as MapIcon, Layers, Filter, Info, Search, X, ChevronRight, BarChart3, Palette } from 'lucide-react';
-import { MapContainer, GeoJSON, useMap } from 'react-leaflet';
+import { MapContainer, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { FeatureCollection, Feature, Geometry, Position } from 'geojson';
 import proj4 from 'proj4';
+import { getFieldLabel } from '../config/fieldLabels';
+import { apiBase } from '../lib/apiBase';
 
 // 修复 Leaflet 默认图标问题
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -23,13 +25,13 @@ L.Marker.prototype.options.icon = DefaultIcon;
 const XIAN_1980_GK_ZONE_19 = '+proj=tmerc +lat_0=0 +lon_0=111 +k=1 +x_0=19500000 +y_0=0 +ellps=krass +units=m +no_defs';
 const WGS84 = '+proj=longlat +datum=WGS84 +no_defs';
 
-// 颜色渐变配置（从浅到深）
+// 颜色渐变配置：8 个色阶，相邻色阶色彩敏感度大、易区分
 const COLOR_SCALES = {
-  red: ['#fee5d9', '#fcbba1', '#fc9272', '#fb6a4a', '#ef3b2c', '#cb181d', '#99000d'],
-  blue: ['#eff3ff', '#c6dbef', '#9ecae1', '#6baed6', '#4292c6', '#2171b5', '#084594'],
-  green: ['#edf8e9', '#c7e9c0', '#a1d99b', '#74c476', '#41ab5d', '#238b45', '#005a32'],
-  purple: ['#f2f0f7', '#dadaeb', '#bcbddc', '#9e9ac8', '#807dba', '#6a51a3', '#4a1486'],
-  orange: ['#feedde', '#fdd0a2', '#fdae6b', '#fd8d3c', '#f16913', '#d94801', '#8c2d04'],
+  red: ['#fff5f0', '#fec4b0', '#fc8d59', '#ef4a2a', '#d73027', '#b31b1b', '#8b0000', '#4d0000'],
+  blue: ['#f0f9ff', '#bae6fd', '#7dd3fc', '#38bdf8', '#0ea5e9', '#0284c7', '#0369a1', '#0c4a6e'],
+  green: ['#f0fdf4', '#bbf7d0', '#86efac', '#4ade80', '#22c55e', '#16a34a', '#15803d', '#14532d'],
+  purple: ['#faf5ff', '#e9d5ff', '#d8b4fe', '#c084fc', '#a855f7', '#9333ea', '#7c3aed', '#5b21b6'],
+  orange: ['#fff7ed', '#ffedd5', '#fed7aa', '#fdba74', '#fb923c', '#f97316', '#ea580c', '#9a3412'],
 };
 
 type ColorScaleName = keyof typeof COLOR_SCALES;
@@ -99,19 +101,31 @@ function transformGeoJSON(geojson: FeatureCollection): FeatureCollection {
   };
 }
 
-// 根据数值获取颜色
-function getColorForValue(value: number | null | undefined, min: number, max: number, colorScale: string[]): string {
+// 根据分位数断点获取颜色（quantile 分段，确保每个色阶区间内数据量大致均匀）
+function getColorForValue(
+  value: number | null | undefined,
+  breaks: number[],
+  colorScale: string[]
+): string {
   if (value === null || value === undefined || isNaN(value)) {
-    return '#cccccc'; // 无数据时显示灰色
+    return '#cccccc';
   }
-  
-  if (max === min) {
-    return colorScale[Math.floor(colorScale.length / 2)];
+  for (let i = 0; i < breaks.length - 1; i++) {
+    if (value <= breaks[i + 1]) return colorScale[Math.min(i, colorScale.length - 1)];
   }
-  
-  const ratio = (value - min) / (max - min);
-  const index = Math.min(Math.floor(ratio * colorScale.length), colorScale.length - 1);
-  return colorScale[Math.max(0, index)];
+  return colorScale[colorScale.length - 1];
+}
+
+// 计算分位数断点：将排序后的数据均分为 n 段
+function computeQuantileBreaks(values: number[], n: number): number[] {
+  if (values.length === 0) return [];
+  const sorted = [...values].sort((a, b) => a - b);
+  const breaks: number[] = [sorted[0]];
+  for (let i = 1; i <= n; i++) {
+    const idx = Math.min(Math.floor((i / n) * sorted.length), sorted.length - 1);
+    breaks.push(sorted[idx]);
+  }
+  return breaks;
 }
 
 export default function GIS() {
@@ -134,7 +148,7 @@ export default function GIS() {
   useEffect(() => {
     const fetchFields = async () => {
       try {
-        const response = await fetch('/api/gis/fields');
+        const response = await fetch(`${apiBase}/api/gis/fields`);
         if (response.ok) {
           const data = await response.json();
           setNumericFields(data.numericFields || []);
@@ -154,7 +168,7 @@ export default function GIS() {
       setError(null);
       try {
         console.log('开始加载 merge 后的 GIS 数据...');
-        const response = await fetch('/api/gis/merged');
+        const response = await fetch(`${apiBase}/api/gis/merged`);
         
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
@@ -174,6 +188,28 @@ export default function GIS() {
           const transformedData = transformGeoJSON(data);
           console.log('投影转换完成，要素数量:', transformedData.features.length);
           setGeoJsonData(transformedData);
+
+          // 从合并数据中推导所有 db_ 字段，并只保留数值型（保证下拉列表与数据库表一致、显示完整）
+          const dbKeys = new Set<string>();
+          transformedData.features.forEach((f: Feature) => {
+            const props = (f.properties as Record<string, unknown>) || {};
+            Object.keys(props).forEach((k) => {
+              if (k.startsWith('db_')) dbKeys.add(k.slice(3));
+            });
+          });
+          const numericFieldsFromData: string[] = [];
+          dbKeys.forEach((fieldName) => {
+            const key = `db_${fieldName}`;
+            const hasNumeric = transformedData.features.some((f: Feature) => {
+              const v = (f.properties as Record<string, unknown>)?.[key];
+              if (v === null || v === undefined) return false;
+              const n = Number(v);
+              return !Number.isNaN(n);
+            });
+            if (hasNumeric) numericFieldsFromData.push(fieldName);
+          });
+          numericFieldsFromData.sort((a, b) => a.localeCompare(b));
+          setNumericFields(numericFieldsFromData);
           
           // 保存 merge 统计信息
           if (data._meta) {
@@ -200,32 +236,25 @@ export default function GIS() {
     setIsVisible(true);
   }, []);
 
-  // 计算选中字段的最小值和最大值
-  const { minValue, maxValue } = useMemo(() => {
-    if (!geoJsonData || !selectedField) {
-      return { minValue: 0, maxValue: 100 };
-    }
+  // 根据当前字段的数据分布计算分位数断点
+  const quantileBreaks = useMemo(() => {
+    if (!geoJsonData || !selectedField) return [] as number[];
 
-    let min = Number.POSITIVE_INFINITY;
-    let max = Number.NEGATIVE_INFINITY;
-
+    const values: number[] = [];
     geoJsonData.features.forEach((feature: Feature) => {
       const props = feature.properties as Record<string, unknown>;
-      // 数据库字段以 db_ 前缀存储
       const value = props?.[`db_${selectedField}`];
       if (value !== null && value !== undefined && !isNaN(Number(value))) {
-        const numValue = Number(value);
-        if (numValue < min) min = numValue;
-        if (numValue > max) max = numValue;
+        values.push(Number(value));
       }
     });
 
-    if (min === Number.POSITIVE_INFINITY) {
-      return { minValue: 0, maxValue: 100 };
-    }
+    const colorScale = COLOR_SCALES[colorScaleName];
+    return computeQuantileBreaks(values, colorScale.length);
+  }, [geoJsonData, selectedField, colorScaleName]);
 
-    return { minValue: min, maxValue: max };
-  }, [geoJsonData, selectedField]);
+  const minValue = quantileBreaks.length > 0 ? quantileBreaks[0] : 0;
+  const maxValue = quantileBreaks.length > 0 ? quantileBreaks[quantileBreaks.length - 1] : 100;
 
   // GeoJSON 样式函数（支持颜色渐变）
   const getGeoJsonStyle = useCallback((feature: Feature) => {
@@ -234,13 +263,12 @@ export default function GIS() {
     
     let fillColor = '#c9a86c'; // 默认颜色
     
-    if (selectedField) {
+    if (selectedField && quantileBreaks.length > 0) {
       const value = props?.[`db_${selectedField}`];
       const colorScale = COLOR_SCALES[colorScaleName];
       fillColor = getColorForValue(
         value !== undefined ? Number(value) : null,
-        minValue,
-        maxValue,
+        quantileBreaks,
         colorScale
       );
     }
@@ -252,7 +280,7 @@ export default function GIS() {
       weight: isSelected ? 3 : 1,
       opacity: 0.8,
     };
-  }, [selectedFeature, selectedField, minValue, maxValue, colorScaleName]);
+  }, [selectedFeature, selectedField, quantileBreaks, colorScaleName]);
 
   // GeoJSON 事件处理
   const onEachFeature = useCallback((feature: Feature, layer: L.Layer) => {
@@ -268,12 +296,14 @@ export default function GIS() {
         const layer = e.target;
         layer.setStyle(getGeoJsonStyle(feature));
       },
-      click: () => {
+      click: (e) => {
+        // 阻止事件冒泡，防止地图缩放
+        L.DomEvent.stopPropagation(e);
         setSelectedFeature(feature);
       },
     });
 
-    // 添加弹出窗口
+    // 添加弹出窗口（禁用自动平移）
     if (feature.properties) {
       const props = feature.properties as Record<string, any>;
       const name = props.NAME || props.name || props.NAME_CH || '未知地区';
@@ -283,11 +313,11 @@ export default function GIS() {
       if (selectedField) {
         const value = props[`db_${selectedField}`];
         if (value !== undefined && value !== null) {
-          popupContent += `<br/>${selectedField}: ${value}`;
+          popupContent += `<br/>${getFieldLabel(selectedField)}: ${value}`;
         }
       }
       
-      layer.bindPopup(popupContent);
+      layer.bindPopup(popupContent, { autoPan: false });
     }
   }, [getGeoJsonStyle, selectedField]);
 
@@ -328,20 +358,20 @@ export default function GIS() {
     return [[minLat, minLng], [maxLat, maxLng]];
   }, [geoJsonData]);
 
-  // 地图边界调整组件
-  function MapBounds({ mapBounds }: { mapBounds: L.LatLngBoundsExpression }) {
-    const map = useMap();
-    useEffect(() => {
-      if (mapBounds && map) {
-        try {
-          map.fitBounds(mapBounds, { padding: [20, 20] });
-        } catch (err) {
-          console.error('调整地图边界失败:', err);
-        }
+  // 缓存地图中心点，避免重复创建数组导致重新渲染
+  const mapCenter = useMemo(() => [35, 110] as [number, number], []);
+  
+  // 地图创建时的回调 - 只执行一次边界调整
+  const handleMapCreated = useCallback((map: L.Map) => {
+    mapRef.current = map;
+    if (bounds) {
+      try {
+        map.fitBounds(bounds, { padding: [20, 20] });
+      } catch (err) {
+        console.error('调整地图边界失败:', err);
       }
-    }, [map, mapBounds]);
-    return null;
-  }
+    }
+  }, [bounds]);
 
   // 过滤功能
   const filteredFeatures = geoJsonData?.features.filter((feature: Feature) => {
@@ -355,22 +385,20 @@ export default function GIS() {
     return searchableText.includes(searchQuery.toLowerCase());
   });
 
-  // 生成图例
+  // 生成图例（基于分位数断点）
   const legendItems = useMemo(() => {
-    if (!selectedField) return [];
-    
+    if (!selectedField || quantileBreaks.length < 2) return [];
+
     const colorScale = COLOR_SCALES[colorScaleName];
-    const step = (maxValue - minValue) / colorScale.length;
-    
-    return colorScale.map((color, index) => {
-      const from = minValue + step * index;
-      const to = minValue + step * (index + 1);
-      return {
-        color,
-        label: `${from.toFixed(1)} - ${to.toFixed(1)}`,
-      };
-    });
-  }, [selectedField, minValue, maxValue, colorScaleName]);
+    const items: { color: string; label: string }[] = [];
+    for (let i = 0; i < quantileBreaks.length - 1 && i < colorScale.length; i++) {
+      items.push({
+        color: colorScale[i],
+        label: `${quantileBreaks[i].toFixed(2)} - ${quantileBreaks[i + 1].toFixed(2)}`,
+      });
+    }
+    return items;
+  }, [selectedField, quantileBreaks, colorScaleName]);
 
   return (
     <main className="min-h-screen bg-mq-paper pt-20">
@@ -436,7 +464,7 @@ export default function GIS() {
                   <option value="">-- 选择字段 --</option>
                   {numericFields.map((field) => (
                     <option key={field} value={field}>
-                      {field}
+                      {getFieldLabel(field)}
                     </option>
                   ))}
                 </select>
@@ -470,7 +498,7 @@ export default function GIS() {
                   <div>数据匹配: {mergeStats.matched} / {mergeStats.total}</div>
                   {selectedField && (
                     <div className="mt-1">
-                      {selectedField}: {minValue.toFixed(2)} ~ {maxValue.toFixed(2)}
+                      {getFieldLabel(selectedField)}: {minValue.toFixed(2)} ~ {maxValue.toFixed(2)}
                     </div>
                   )}
                 </div>
@@ -482,7 +510,7 @@ export default function GIS() {
               <div className="mb-6">
                 <h3 className="text-sm font-semibold text-mq-ink mb-3 flex items-center gap-2">
                   <Layers className="w-4 h-4" />
-                  图例 - {selectedField}
+                  图例 - {getFieldLabel(selectedField)}
                 </h3>
                 <div className="space-y-1">
                   {legendItems.map((item, index) => (
@@ -516,8 +544,8 @@ export default function GIS() {
               ) : error ? (
                 <div className="text-sm text-red-600">{error}</div>
               ) : filteredFeatures && filteredFeatures.length > 0 ? (
-                <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                  {filteredFeatures.slice(0, 50).map((feature: Feature, index: number) => {
+                <div className="space-y-2 max-h-[520px] overflow-y-auto">
+                  {filteredFeatures.map((feature: Feature, index: number) => {
                     const props = feature.properties as Record<string, unknown> | null;
                     const name = (props?.NAME || props?.name || props?.NAME_CH || `地区 ${index + 1}`) as string;
                     const isSelected = selectedFeature?.properties === feature.properties;
@@ -550,11 +578,9 @@ export default function GIS() {
                       </button>
                     );
                   })}
-                  {filteredFeatures.length > 50 && (
-                    <div className="text-xs text-mq-gray text-center py-2">
-                      显示前 50 项，共 {filteredFeatures.length} 项
-                    </div>
-                  )}
+                  <div className="text-xs text-mq-gray text-center py-2">
+                    共 {filteredFeatures.length} 项
+                  </div>
                 </div>
               ) : (
                 <div className="text-sm text-mq-gray">暂无数据</div>
@@ -565,10 +591,10 @@ export default function GIS() {
 
         {/* Map Area */}
         <div className="flex-1 relative bg-mq-paper">
-          {/* Toggle Sidebar Button */}
+          {/* Toggle Sidebar Button（置于地图缩放控件下方，避免重叠） */}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="absolute top-4 left-4 z-[1000] w-10 h-10 bg-white rounded-lg
+            className="absolute top-24 left-4 z-[1000] w-10 h-10 bg-white rounded-lg
                      shadow-md flex items-center justify-center
                      transition-all duration-300 hover:shadow-lg"
           >
@@ -586,10 +612,10 @@ export default function GIS() {
             </div>
           ) : geoJsonData ? (
             <MapContainer
-              center={[35, 110]}
+              center={mapCenter}
               zoom={5}
               style={{ height: '100%', width: '100%' }}
-              ref={mapRef}
+              whenCreated={handleMapCreated}
             >
               {filteredFeatures && (
                 <GeoJSON
@@ -599,7 +625,6 @@ export default function GIS() {
                   onEachFeature={(feature, layer) => onEachFeature(feature as Feature, layer)}
                 />
               )}
-              <MapBounds mapBounds={bounds} />
             </MapContainer>
           ) : null}
 
@@ -642,7 +667,7 @@ export default function GIS() {
                         .filter(([key]) => key.startsWith('db_'))
                         .map(([key, value]) => (
                           <div key={key} className="text-sm flex justify-between">
-                            <span className="text-mq-gray">{key.replace('db_', '')}:</span>
+                            <span className="text-mq-gray">{getFieldLabel(key.replace('db_', ''))}:</span>
                             <span className="text-mq-ink font-medium">{String(value ?? '-')}</span>
                           </div>
                         ))}
@@ -686,7 +711,7 @@ export default function GIS() {
         </div>
         {selectedField && (
           <div className="mt-1 text-mq-red">
-            当前可视化: {selectedField}
+            当前可视化: {getFieldLabel(selectedField)}
           </div>
         )}
       </div>

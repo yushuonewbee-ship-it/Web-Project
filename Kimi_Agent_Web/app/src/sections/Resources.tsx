@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Eye } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Eye } from 'lucide-react';
 
 const resources = [
   {
@@ -74,22 +73,8 @@ export default function Resources() {
     <section ref={sectionRef} className="py-24 bg-mq-paper">
       <div className="mq-container">
         {/* Section Header */}
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-12">
-          <div>
-            <h2 className="mq-section-title text-left mb-2">最新资源集</h2>
-            <p className="text-mq-gray">
-              新版已发布 <span className="text-mq-red font-semibold">703</span> 套精选资源
-            </p>
-          </div>
-          <div className="flex gap-4 mt-4 md:mt-0">
-            <Link
-              to="/database"
-              className="mq-btn-outline text-sm flex items-center gap-2"
-            >
-              浏览所有资源
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
+        <div className="text-center mb-12">
+          <h2 className="mq-section-title">明清文化览略</h2>
         </div>
 
         {/* Resources Grid */}
@@ -98,13 +83,12 @@ export default function Resources() {
             const isVisible = visibleCards.includes(index);
 
             return (
-              <Link
+              <div
                 key={resource.id}
-                to={`/database/${resource.id}`}
                 data-index={index}
                 className={`resource-card group relative bg-white rounded-xl overflow-hidden
                            shadow-mq transition-all duration-700
-                           hover:shadow-mq-hover hover:-translate-y-2
+                           hover:shadow-mq-hover hover:-translate-y-2 cursor-pointer
                            ${isVisible ? 'opacity-100' : 'opacity-0'}`}
                 style={{
                   transform: isVisible
@@ -163,7 +147,7 @@ export default function Resources() {
                               transform rotate-12">
                   <span className="text-mq-gold text-xs font-bold">古</span>
                 </div>
-              </Link>
+              </div>
             );
           })}
         </div>

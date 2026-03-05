@@ -105,7 +105,7 @@ export default function Hero() {
                          isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
                        }`}
           >
-            探索古代农业智慧，传承中华农耕文明
+            探索古代农业生产，透视中华农耕变迁
           </p>
 
           {/* Search Box */}
@@ -117,7 +117,7 @@ export default function Hero() {
             <div className="relative group">
               <input
                 type="text"
-                placeholder="搜索古籍、农书、资料..."
+                placeholder="搜索省份或府州县名"
                 className="w-full px-8 py-5 pr-32 rounded-full bg-white/95 text-mq-ink
                          placeholder:text-mq-gray/60
                          shadow-lg shadow-black/20
@@ -146,9 +146,9 @@ export default function Hero() {
             }`}
           >
             {[
-              { value: '703', label: '精选资源' },
-              { value: '128', label: '农业古籍' },
-              { value: '56', label: '历史地图' },
+              { value: '3', label: 'Databases' },
+              { value: '6', label: 'Members' },
+              { value: '2+', label: 'Fields' },
             ].map((stat, index) => (
               <div key={index} className="text-center">
                 <div className="text-3xl md:text-4xl font-bold text-mq-gold mb-1">

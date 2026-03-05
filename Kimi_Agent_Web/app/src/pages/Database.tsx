@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { Search, Download, ChevronLeft, ChevronRight, ArrowUpDown, ArrowDown, ArrowUp, FileSpreadsheet } from 'lucide-react';
 import AdvancedFilter, { type FilterGroup, type FieldConfigItem } from '../components/AdvancedFilter';
 import { operators, logicOperators } from '../data/mockDatabase';
+import { columnLabelMap } from '../config/fieldLabels';
+import { apiBase } from '../lib/apiBase';
 
 type DatasetKey = 'ming_province' | 'qing_province' | 'qing_prefecture';
 
@@ -14,36 +16,36 @@ interface SortConfig {
 const datasetFieldConfig: Record<DatasetKey, FieldConfigItem[]> = {
   ming_province: [
     { key: '省份', label: '省份', type: 'text', filterable: true },
-    { key: '1400年人口', label: '1400年人口', type: 'number', filterable: true },
-    { key: '1580年人口', label: '1580年人口', type: 'number', filterable: true },
-    { key: '1400年耕地面积', label: '1400年耕地面积', type: 'number', filterable: true },
-    { key: '1580年耕地面积', label: '1580年耕地面积', type: 'number', filterable: true },
-    { key: '1400年人均耕地面积', label: '1400年人均耕地面积', type: 'number', filterable: true },
-    { key: '1580年人均耕地面积', label: '1580年人均耕地面积', type: 'number', filterable: true },
+    { key: '1400年人口', label: '1400年人口（百万）', type: 'number', filterable: true },
+    { key: '1580年人口', label: '1580年人口（百万）', type: 'number', filterable: true },
+    { key: '1400年耕地面积', label: '1400年耕地面积（百万亩）', type: 'number', filterable: true },
+    { key: '1580年耕地面积', label: '1580年耕地面积（百万亩）', type: 'number', filterable: true },
+    { key: '1400年人均耕地面积', label: '1400年人均耕地面积（亩/人）', type: 'number', filterable: true },
+    { key: '1580年人均耕地面积', label: '1580年人均耕地面积（亩/人）', type: 'number', filterable: true },
     { key: '亩产水平系数', label: '亩产水平系数', type: 'number', filterable: true },
     { key: '1400年人均农业净产值', label: '1400年人均农业净产值', type: 'number', filterable: true },
     { key: '1580年人均农业净产值', label: '1580年人均农业净产值', type: 'number', filterable: true },
   ],
   qing_province: [
     { key: '省份', label: '省份', type: 'text', filterable: true },
-    { key: '1661年人口', label: '1661年人口', type: 'number', filterable: true },
-    { key: '1685年人口', label: '1685年人口', type: 'number', filterable: true },
-    { key: '1724年人口', label: '1724年人口', type: 'number', filterable: true },
-    { key: '1766年人口', label: '1766年人口', type: 'number', filterable: true },
-    { key: '1812年人口', label: '1812年人口', type: 'number', filterable: true },
-    { key: '1850年人口', label: '1850年人口', type: 'number', filterable: true },
-    { key: '1661年耕地面积', label: '1661年耕地面积', type: 'number', filterable: true },
-    { key: '1685年耕地面积', label: '1685年耕地面积', type: 'number', filterable: true },
-    { key: '1724年耕地面积', label: '1724年耕地面积', type: 'number', filterable: true },
-    { key: '1766年耕地面积', label: '1766年耕地面积', type: 'number', filterable: true },
-    { key: '1812年耕地面积', label: '1812年耕地面积', type: 'number', filterable: true },
-    { key: '1850年耕地面积', label: '1850年耕地面积', type: 'number', filterable: true },
-    { key: '1661年人均耕地面积', label: '1661年人均耕地面积', type: 'number', filterable: true },
-    { key: '1685年人均耕地面积', label: '1685年人均耕地面积', type: 'number', filterable: true },
-    { key: '1724年人均耕地面积', label: '1724年人均耕地面积', type: 'number', filterable: true },
-    { key: '1766年人均耕地面积', label: '1766年人均耕地面积', type: 'number', filterable: true },
-    { key: '1812年人均耕地面积', label: '1812年人均耕地面积', type: 'number', filterable: true },
-    { key: '1850年人均耕地面积', label: '1850年人均耕地面积', type: 'number', filterable: true },
+    { key: '1661年人口', label: '1661年人口（万）', type: 'number', filterable: true },
+    { key: '1685年人口', label: '1685年人口（万）', type: 'number', filterable: true },
+    { key: '1724年人口', label: '1724年人口（万）', type: 'number', filterable: true },
+    { key: '1766年人口', label: '1766年人口（万）', type: 'number', filterable: true },
+    { key: '1812年人口', label: '1812年人口（万）', type: 'number', filterable: true },
+    { key: '1850年人口', label: '1850年人口（万）', type: 'number', filterable: true },
+    { key: '1661年耕地面积', label: '1661年耕地面积（万亩）', type: 'number', filterable: true },
+    { key: '1685年耕地面积', label: '1685年耕地面积（万亩）', type: 'number', filterable: true },
+    { key: '1724年耕地面积', label: '1724年耕地面积（万亩）', type: 'number', filterable: true },
+    { key: '1766年耕地面积', label: '1766年耕地面积（万亩）', type: 'number', filterable: true },
+    { key: '1812年耕地面积', label: '1812年耕地面积（万亩）', type: 'number', filterable: true },
+    { key: '1850年耕地面积', label: '1850年耕地面积（万亩）', type: 'number', filterable: true },
+    { key: '1661年人均耕地面积', label: '1661年人均耕地面积（亩/人）', type: 'number', filterable: true },
+    { key: '1685年人均耕地面积', label: '1685年人均耕地面积（亩/人）', type: 'number', filterable: true },
+    { key: '1724年人均耕地面积', label: '1724年人均耕地面积（亩/人）', type: 'number', filterable: true },
+    { key: '1766年人均耕地面积', label: '1766年人均耕地面积（亩/人）', type: 'number', filterable: true },
+    { key: '1812年人均耕地面积', label: '1812年人均耕地面积（亩/人）', type: 'number', filterable: true },
+    { key: '1850年人均耕地面积', label: '1850年人均耕地面积（亩/人）', type: 'number', filterable: true },
     { key: '1661年全省人均农业产值', label: '1661年全省人均农业产值', type: 'number', filterable: true },
     { key: '1685年全省人均农业产值', label: '1685年全省人均农业产值', type: 'number', filterable: true },
     { key: '1724年全省人均农业产值', label: '1724年全省人均农业产值', type: 'number', filterable: true },
@@ -80,14 +82,15 @@ const datasetFieldConfig: Record<DatasetKey, FieldConfigItem[]> = {
     { key: 'AREA', label: 'AREA', type: 'number', filterable: true },
     { key: 'Shape_Leng', label: 'Shape_Leng', type: 'number', filterable: true },
     { key: 'Shape_Area', label: 'Shape_Area', type: 'number', filterable: true },
-    { key: 'Avg_pointi', label: 'Avg_pointi', type: 'number', filterable: true },
-    { key: 'Avg_grid_c（土壤指数）', label: 'Avg_grid_c（土壤指数）', type: 'number', filterable: true },
+    { key: 'Avg_grid_c（土壤指数）', label: 'Avg_grip', type: 'number', filterable: true },
     { key: 'Avg_grid_xs', label: 'Avg_grid_xs', type: 'number', filterable: true },
     { key: 'Solow residual', label: 'Solow residual', type: 'number', filterable: true },
     { key: 'TE_DEA', label: 'TE_DEA', type: 'number', filterable: true },
     { key: 'TE_SFA', label: 'TE_SFA', type: 'number', filterable: true },
   ],
 };
+
+// columnLabelMap 已从 ../config/fieldLabels 导入
 
 export default function Database() {
   const [dataset, setDataset] = useState<DatasetKey>('ming_province');
@@ -116,11 +119,44 @@ export default function Database() {
       setFilterGroups([]);
       setSearchQuery('');
       try {
-        const res = await fetch(`/api/${dataset}`);
+        const res = await fetch(`${apiBase}/api/${dataset}`);
         if (!res.ok) {
           throw new Error('获取数据库数据失败');
         }
-        const data = (await res.json()) as Record<string, any>[];
+        let data = (await res.json()) as Record<string, any>[];
+
+        // 对清代省级数据进行字段清洗：
+        // 使用“人口修正”列覆盖原人口列，并移除修正列
+        if (dataset === 'qing_province') {
+          data = data.map((row) => {
+            const newRow = { ...row };
+            if (newRow['1766年人口修正'] !== undefined) {
+              newRow['1766年人口'] = newRow['1766年人口修正'];
+              delete newRow['1766年人口修正'];
+            }
+            if (newRow['1812年人口修正'] !== undefined) {
+              newRow['1812年人口'] = newRow['1812年人口修正'];
+              delete newRow['1812年人口修正'];
+            }
+            // 删除人均耕地面积字段（不显示）
+            delete newRow['1661年人均耕地面积'];
+            delete newRow['1685年人均耕地面积'];
+            delete newRow['1724年人均耕地面积'];
+            delete newRow['1766年人均耕地面积'];
+            delete newRow['1812年人均耕地面积'];
+            delete newRow['1850年人均耕地面积'];
+            return newRow;
+          });
+        }
+
+        if (dataset === 'qing_prefecture') {
+          data = data.map((row) => {
+            const newRow = { ...row };
+            delete newRow['Avg_pointi'];
+            return newRow;
+          });
+        }
+
         setRows(data);
         setCurrentPage(1);
         setSelectedRows([]);
@@ -459,7 +495,7 @@ export default function Database() {
                             onClick={() => handleSort(col)}
                             className="flex items-center gap-1 hover:text-mq-red transition-colors"
                           >
-                            {col}
+                            {columnLabelMap[col] ?? col}
                             {getSortIcon(col)}
                           </button>
                         </th>
