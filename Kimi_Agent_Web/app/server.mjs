@@ -52,6 +52,8 @@ app.get("/api/health", async (_req, res) => {
         database: process.env.MYSQL_DATABASE || "(未设置)",
         user: process.env.MYSQL_USER || "(未设置)",
         ssl: process.env.MYSQL_SSL || "(未设置)",
+        passwordLength: (process.env.MYSQL_PASSWORD || "").length,
+        passwordPreview: (process.env.MYSQL_PASSWORD || "").slice(0, 4) + "****",
       },
     });
   }
