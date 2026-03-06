@@ -40,7 +40,20 @@ app.get("/api/health", async (_req, res) => {
     res.json({ status: "ok", db: rows[0].ok === 1 });
   } catch (err) {
     console.error("Health check error:", err);
-    res.status(500).json({ status: "error", message: "数据库连接失败" });
+    res.status(500).json({
+      status: "error",
+      message: "数据库连接失败",
+      errorCode: err.code,
+      errorMessage: err.message,
+      // 调试用：显示当前使用的连接配置（隐藏密码）
+      debug: {
+        host: process.env.MYSQL_HOST || "(未设置，使用默认 localhost)",
+        port: process.env.MYSQL_PORT || "(未设置，使用默认 3306)",
+        database: process.env.MYSQL_DATABASE || "(未设置)",
+        user: process.env.MYSQL_USER || "(未设置)",
+        ssl: process.env.MYSQL_SSL || "(未设置)",
+      },
+    });
   }
 });
 
