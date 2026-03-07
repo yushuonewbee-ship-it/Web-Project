@@ -152,7 +152,15 @@ export default function GIS() {
         if (response.ok) {
           const data = await response.json();
           setNumericFields(data.numericFields || []);
-          console.log('可用数值字段:', data.numericFields);
+          console.log('API返回的数值字段:', data.numericFields);
+          console.log('所有字段:', data.allFields);
+          // 检查 Solow residual 相关字段
+          const solowFields = (data.allFields || []).filter((f: string) => 
+            f.toLowerCase().includes('solow') || f.toLowerCase().includes('residual')
+          );
+          if (solowFields.length > 0) {
+            console.log('找到 Solow residual 相关字段:', solowFields);
+          }
         }
       } catch (err) {
         console.error('获取字段列表失败:', err);
@@ -189,7 +197,7 @@ export default function GIS() {
           console.log('投影转换完成，要素数量:', transformedData.features.length);
           setGeoJsonData(transformedData);
 
-          // 从合并数据中推导所有 db_ 字段，并只保留数值型（保证下拉列表与数据库表一致、显示完整）
+          // 从合并数据中收集所有 db_ 字段
           const dbKeys = new Set<string>();
           transformedData.features.forEach((f: Feature) => {
             const props = (f.properties as Record<string, unknown>) || {};
@@ -197,19 +205,16 @@ export default function GIS() {
               if (k.startsWith('db_')) dbKeys.add(k.slice(3));
             });
           });
-          const numericFieldsFromData: string[] = [];
-          dbKeys.forEach((fieldName) => {
-            const key = `db_${fieldName}`;
-            const hasNumeric = transformedData.features.some((f: Feature) => {
-              const v = (f.properties as Record<string, unknown>)?.[key];
-              if (v === null || v === undefined) return false;
-              const n = Number(v);
-              return !Number.isNaN(n);
-            });
-            if (hasNumeric) numericFieldsFromData.push(fieldName);
+          
+          // 合并 API 返回的数值字段和从数据中发现的字段（确保完整性）
+          const allFields = Array.from(dbKeys).sort((a, b) => a.localeCompare(b));
+          
+          // 如果 API 返回了 numericFields，优先使用；否则使用从数据推导的
+          // 同时保留从数据中发现的字段，避免遗漏
+          setNumericFields(prev => {
+            const combined = new Set([...prev, ...allFields]);
+            return Array.from(combined).sort((a, b) => a.localeCompare(b));
           });
-          numericFieldsFromData.sort((a, b) => a.localeCompare(b));
-          setNumericFields(numericFieldsFromData);
           
           // 保存 merge 统计信息
           if (data._meta) {

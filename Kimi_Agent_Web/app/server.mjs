@@ -11,14 +11,33 @@ import * as shp from "shpjs";
 const dbConfig = {
   host: process.env.MYSQL_HOST || "localhost",
   port: Number(process.env.MYSQL_PORT) || 3306,
-  database: process.env.MYSQL_DATABASE || "mingqing agricultural database",
+  database: process.env.MYSQL_DATABASE || "mingqing_agricultural_database",
   user: process.env.MYSQL_USER || "root",
   password: process.env.MYSQL_PASSWORD || "",
   charset: "utf8mb4",
   connectionLimit: 10,
+  connectTimeout: 60000, // 连接超时 60 秒
+  acquireTimeout: 60000, // 获取连接超时 60 秒
+  timeout: 60000,        // 查询超时 60 秒
   // TiDB Cloud 等云数据库要求 SSL 连接；设置 MYSQL_SSL=true 启用
-  ...(process.env.MYSQL_SSL === "true" ? { ssl: { rejectUnauthorized: true } } : {}),
+  ...(process.env.MYSQL_SSL === "true" 
+    ? { 
+        ssl: { 
+          rejectUnauthorized: true,
+          minVersion: 'TLSv1.2'
+        } 
+      } 
+    : {}),
 };
+
+// 打印连接配置（调试用，隐藏密码）
+console.log('Database Config:', {
+  host: dbConfig.host,
+  port: dbConfig.port,
+  database: dbConfig.database,
+  user: dbConfig.user,
+  ssl: process.env.MYSQL_SSL === "true" ? 'enabled' : 'disabled'
+});
 
 // 创建连接池
 const pool = mysql.createPool(dbConfig);
@@ -188,11 +207,35 @@ app.get("/api/gis/fields", async (_req, res) => {
       .filter(col => numericTypes.some(t => col.DATA_TYPE.toLowerCase().includes(t)))
       .map(col => col.COLUMN_NAME);
     
+    // 额外检查：获取样本数据，找出实际包含数值的字段（包括可能被误标类型的字段）
+    const [sampleRows] = await pool.query("SELECT * FROM `qing_prefecture` LIMIT 10");
+    const additionalNumericFields = new Set();
+    
+    if (sampleRows.length > 0) {
+      sampleRows.forEach(row => {
+        Object.entries(row).forEach(([key, value]) => {
+          // 如果值是数字类型，或者是可以转换为数字的字符串
+          if (value !== null && value !== undefined) {
+            const num = Number(value);
+            if (!Number.isNaN(num)) {
+              additionalNumericFields.add(key);
+            }
+          }
+        });
+      });
+    }
+    
+    // 合并两种方法找到的数值字段
+    const allNumericFields = Array.from(new Set([...numericFields, ...additionalNumericFields]));
+    
     // 获取所有字段名
     const allFields = columns.map(col => col.COLUMN_NAME);
     
+    console.log("数值字段:", allNumericFields);
+    console.log("额外发现的数值字段:", Array.from(additionalNumericFields).filter(f => !numericFields.includes(f)));
+    
     res.json({
-      numericFields,  // 可用于颜色渐变可视化的数值字段
+      numericFields: allNumericFields,  // 可用于颜色渐变可视化的数值字段
       allFields,      // 所有字段
     });
   } catch (err) {
