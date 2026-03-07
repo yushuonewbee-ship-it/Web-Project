@@ -364,13 +364,16 @@ export default function GIS() {
     return [[minLat, minLng], [maxLat, maxLng]];
   }, [geoJsonData]);
 
-  // 地图边界调整组件
+  // 地图边界调整组件 - 只在初始加载时执行一次
   function MapBounds({ mapBounds }: { mapBounds: L.LatLngBoundsExpression }) {
     const map = useMap();
+    const hasFitted = useRef(false);
+    
     useEffect(() => {
-      if (mapBounds && map) {
+      if (mapBounds && map && !hasFitted.current) {
         try {
           map.fitBounds(mapBounds, { padding: [20, 20] });
+          hasFitted.current = true;
         } catch (err) {
           console.error('调整地图边界失败:', err);
         }
