@@ -320,7 +320,10 @@ export default function GIS() {
         }
       }
       
-      layer.bindPopup(popupContent);
+      layer.bindPopup(popupContent, { 
+        autoPan: false,  // 禁用自动平移
+        closeButton: true 
+      });
     }
   }, [getGeoJsonStyle, selectedField]);
 
@@ -619,6 +622,9 @@ export default function GIS() {
               zoom={5}
               style={{ height: '100%', width: '100%' }}
               ref={mapRef}
+              scrollWheelZoom={true}
+              doubleClickZoom={false}
+              touchZoom={true}
             >
               {filteredFeatures && (
                 <GeoJSON
