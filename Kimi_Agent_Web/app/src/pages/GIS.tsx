@@ -364,23 +364,26 @@ export default function GIS() {
     return [[minLat, minLng], [maxLat, maxLng]];
   }, [geoJsonData]);
 
-  // 地图边界调整组件 - 只在初始加载时执行一次
-  function MapBounds({ mapBounds }: { mapBounds: L.LatLngBoundsExpression }) {
-    const map = useMap();
-    const hasFitted = useRef(false);
-    
-    useEffect(() => {
-      if (mapBounds && map && !hasFitted.current) {
-        try {
-          map.fitBounds(mapBounds, { padding: [20, 20] });
-          hasFitted.current = true;
-        } catch (err) {
-          console.error('调整地图边界失败:', err);
+  // 地图边界调整组件 - 只在首次加载地图数据时执行一次
+  const MapBounds = useMemo(() => {
+    return function MapBoundsComponent({ mapBounds }: { mapBounds: L.LatLngBoundsExpression }) {
+      const map = useMap();
+      
+      useEffect(() => {
+        if (mapBounds && map) {
+          try {
+            map.fitBounds(mapBounds, { padding: [20, 20] });
+          } catch (err) {
+            console.error('调整地图边界失败:', err);
+          }
         }
-      }
-    }, [map, mapBounds]);
-    return null;
-  }
+        // 只执行一次，空依赖数组
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
+      
+      return null;
+    };
+  }, []);
 
   // 过滤功能
   const filteredFeatures = geoJsonData?.features.filter((feature: Feature) => {
