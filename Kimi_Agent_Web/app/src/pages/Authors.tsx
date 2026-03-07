@@ -177,75 +177,73 @@ export default function Authors() {
             })()}
           </div>
 
-          {/* 第二行：仅第二张卡片，与第一张同尺寸 */}
-          <div
-            className={`max-w-2xl mx-auto mb-8 transition-all duration-700 ${
-              isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
-            }`}
-            style={{ transitionDelay: '350ms' }}
-          >
-            {(() => {
-              const member = teamMembers[1];
-              return (
-                <div className="bg-white rounded-2xl shadow-mq overflow-hidden hover:shadow-mq-lg">
-                  <div className="p-5">
-                    <div className="flex items-start gap-4">
-                      <div className="w-16 h-16 bg-mq-red/10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        {member.avatar ? (
-                          <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-xl font-bold text-mq-red">
-                            {member.name.charAt(0) === '[' ? '待' : member.name.charAt(0)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <h3 className="text-lg font-bold text-mq-ink">{member.name}</h3>
-                          <span className="px-2 py-0.5 bg-mq-gold/20 text-mq-gold text-xs rounded-full">{member.title}</span>
-                        </div>
-                        <p className="text-mq-gray text-sm mb-3 leading-relaxed">{member.bio}</p>
-                        <div className="flex items-center gap-2 text-xs text-mq-gray mb-2">
-                          <GraduationCap className="w-3 h-3 text-mq-red flex-shrink-0" />
-                          <span>{member.research}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs">
-                          <Mail className="w-3 h-3 text-mq-red flex-shrink-0" />
-                          <a href={`mailto:${member.email}`} className="text-mq-red hover:underline truncate">{member.email}</a>
-                        </div>
-                      </div>
-                    </div>
-                    {member.publications.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-mq-border">
-                        <div className="flex items-center gap-2 mb-2">
-                          <BookOpen className="w-3 h-3 text-mq-gold" />
-                          <span className="text-xs font-medium text-mq-ink">代表著作</span>
-                        </div>
-                        <ul className="space-y-1">
-                          {member.publications.map((pub, i) => (
-                            <li key={i} className="text-xs text-mq-gray flex items-center gap-2">
-                              <Award className="w-3 h-3 text-mq-gold flex-shrink-0" />
-                              <span className="line-clamp-2">{pub}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-
-          {/* 第三行：四张卡片，较窄、无代表著作 */}
-          <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {teamMembers.slice(2, 6).map((member, index) => (
+          {/* 第二行：两张卡片并排 */}
+          <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {teamMembers.slice(1, 3).map((member, index) => (
               <div
                 key={member.id}
                 className={`bg-white rounded-2xl shadow-mq overflow-hidden hover:shadow-mq-lg transition-all duration-700 ${
                   isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
                 }`}
-                style={{ transitionDelay: `${500 + index * 100}ms` }}
+                style={{ transitionDelay: `${350 + index * 100}ms` }}
+              >
+                <div className="p-5">
+                  <div className="flex items-start gap-4">
+                    <div className="w-16 h-16 bg-mq-red/10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      {member.avatar ? (
+                        <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xl font-bold text-mq-red">
+                          {member.name.charAt(0) === '[' ? '待' : member.name.charAt(0)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <h3 className="text-lg font-bold text-mq-ink">{member.name}</h3>
+                        <span className="px-2 py-0.5 bg-mq-gold/20 text-mq-gold text-xs rounded-full">{member.title}</span>
+                      </div>
+                      <p className="text-mq-gray text-sm mb-3 leading-relaxed line-clamp-3">{member.bio}</p>
+                      <div className="flex items-center gap-2 text-xs text-mq-gray mb-2">
+                        <GraduationCap className="w-3 h-3 text-mq-red flex-shrink-0" />
+                        <span>{member.research}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <Mail className="w-3 h-3 text-mq-red flex-shrink-0" />
+                        <a href={`mailto:${member.email}`} className="text-mq-red hover:underline truncate">{member.email}</a>
+                      </div>
+                    </div>
+                  </div>
+                  {member.publications.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-mq-border">
+                      <div className="flex items-center gap-2 mb-2">
+                        <BookOpen className="w-3 h-3 text-mq-gold" />
+                        <span className="text-xs font-medium text-mq-ink">代表著作</span>
+                      </div>
+                      <ul className="space-y-1">
+                        {member.publications.map((pub, i) => (
+                          <li key={i} className="text-xs text-mq-gray flex items-center gap-2">
+                            <Award className="w-3 h-3 text-mq-gold flex-shrink-0" />
+                            <span className="line-clamp-2">{pub}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 第三行：三张卡片并排 */}
+          <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-5">
+            {teamMembers.slice(3, 6).map((member, index) => (
+              <div
+                key={member.id}
+                className={`bg-white rounded-2xl shadow-mq overflow-hidden hover:shadow-mq-lg transition-all duration-700 ${
+                  isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+                }`}
+                style={{ transitionDelay: `${550 + index * 100}ms` }}
               >
                 <div className="p-5">
                   <div className="flex flex-col items-center text-center sm:flex-row sm:text-left sm:items-start gap-3">
